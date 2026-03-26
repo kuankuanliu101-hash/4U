@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>馬卡龍魔法學院 🪄 單字大挑戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Nunito', 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #FFD1DC 0%, #E0BBE4 50%, #957DAD 100%);
+            min-height: 100vh;
+            touch-action: manipulation;
+        }
+
+        .perspective-1000 { perspective: 1000px; }
+        .transform-style-3d { transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1); }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        .card-back { transform: rotateY(180deg); }
+
+        .btn-pop:active { transform: scale(0.95); }
+        .btn-hover:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+
+        .hp-bar-fill, .exp-bar-fill { transition: width 0.3s ease-in-out; }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.5); border-radius: 10px; }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .floating { animation: float 3s ease-in-out infinite; }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(255, 209, 220, 0.5); }
+            50% { box-shadow: 0 0 25px rgba(255, 209, 220, 1); }
+        }
+        .glow-effect { animation: pulse-glow 2s infinite; }
+
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 動畫 */
+        @keyframes comboPop {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .combo-anim { animation: comboPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        @keyframes heartBreak {
+            0% { transform: scale(1); filter: grayscale(0%); opacity: 1; }
+            50% { transform: scale(1.5) rotate(-15deg); filter: grayscale(50%); opacity: 0.8; }
+            100% { transform: scale(0.8) rotate(0deg); filter: grayscale(100%); opacity: 0.3; }
+        }
+        .heart-break { animation: heartBreak 0.5s ease-out forwards; }
+    </style>
+</head>
+<body class="text-gray-700 overflow-x-hidden relative">
+
+    <!-- 頂部導覽列與任務分頁 -->
+    <div class="sticky top-0 z-50">
+        <nav class="p-3 sm:p-4 flex justify-between items-center bg-white/60 backdrop-blur-md shadow-sm">
+            <div class="text-lg sm:text-xl font-black text-purple-800 flex items-center gap-2 cursor-pointer" onclick="startTask('menu')">
+                🪄 馬卡龍魔法學院 <span class="text-xs sm:text-sm font-normal hidden sm:inline text-purple-600">by Joyce</span>
+            </div>
+            
+            <!-- 經驗值與稱號等級系統 -->
+            <div class="flex items-center gap-2 sm:gap-3 bg-white/90 px-3 py-1.5 rounded-full shadow-sm border border-purple-100 relative group cursor-pointer">
+                <div class="text-xs sm:text-sm font-black text-purple-700 flex flex-col items-center leading-none">
+                    <span id="user-title" class="text-[10px] text-pink-500 mb-0.5">🐣 魔法學徒</span>
+                    <span>Lv.<span id="user-level" class="text-lg">1</span></span>
+                </div>
+                <div class="w-16 sm:w-24 bg-purple-100 rounded-full h-2 sm:h-3 overflow-hidden border border-purple-200">
+                    <div id="user-exp-bar" class="bg-gradient-to-r from-pink-400 to-purple-500 h-full exp-bar-fill" style="width: 0%"></div>
+                </div>
+                <!-- 提示框 -->
+                <div class="absolute top-full right-0 mt-2 bg-white p-2 rounded-xl shadow-lg text-xs font-bold text-gray-600 hidden group-hover:block w-32 text-center border border-gray-100">
+                    進度已自動儲存 💾
+                </div>
+            </div>
+        </nav>
+        
+        <!-- 橫向任務列 -->
+        <div class="bg-white/40 backdrop-blur-md shadow-sm px-2 py-3 overflow-x-auto hide-scrollbar border-b border-white/50">
+            <div class="flex gap-2 sm:gap-3 w-max mx-auto px-2">
+                <button id="tab-flashcard" onclick="startTask('flashcard')" class="task-tab btn-pop opacity-70 bg-pink-100 text-pink-700 hover:bg-pink-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-pink-200 text-sm sm:text-base">
+                    <i class="fas fa-clone"></i> 魔法閃卡
+                </button>
+                <button id="tab-en-ch" onclick="startTask('en-ch')" class="task-tab btn-pop opacity-70 bg-blue-100 text-blue-700 hover:bg-blue-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-blue-200 text-sm sm:text-base">
+                    <i class="fas fa-language"></i> 英選中
+                </button>
+                <button id="tab-ch-en" onclick="startTask('ch-en')" class="task-tab btn-pop opacity-70 bg-yellow-100 text-yellow-700 hover:bg-yellow-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-yellow-200 text-sm sm:text-base">
+                    <i class="fas fa-spell-check"></i> 中選英
+                </button>
+                <button id="tab-survival" onclick="startTask('survival')" class="task-tab btn-pop opacity-70 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-emerald-200 text-sm sm:text-base">
+                    <i class="fas fa-heartbeat"></i> 極限生存
+                </button>
+                <button id="tab-memory" onclick="startTask('memory')" class="task-tab btn-pop opacity-70 bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-purple-200 text-sm sm:text-base">
+                    <i class="fas fa-th"></i> 記憶翻牌
+                </button>
+                <button id="tab-boss" onclick="startTask('boss')" class="task-tab btn-pop opacity-70 bg-red-100 text-red-700 hover:bg-red-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-red-200 text-sm sm:text-base">
+                    <i class="fas fa-dragon"></i> 魔王戰鬥
+                </button>
+                <button id="tab-review" onclick="startTask('review')" class="task-tab btn-pop opacity-70 bg-orange-100 text-orange-700 hover:bg-orange-200 px-4 py-2 rounded-full font-bold shadow-sm transition flex items-center gap-2 border-2 border-orange-200 text-sm sm:text-base">
+                    <i class="fas fa-book-open"></i> 錯題筆記
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <main class="max-w-md md:max-w-2xl mx-auto p-4 pb-24">
+
+        <!-- 頁面 1: 主選單 -->
+        <div id="page-menu" class="page-section flex flex-col gap-4 animate-fade-in pt-6 sm:pt-10">
+            <div class="text-center mb-6">
+                <div class="text-7xl sm:text-8xl mb-6 floating flex justify-center gap-2 drop-shadow-md">🦄 🧸 🍡</div>
+                <h1 class="text-3xl sm:text-4xl font-black text-white drop-shadow-lg mb-4">歡迎光臨！</h1>
+                <div class="bg-white/80 p-6 rounded-3xl shadow-xl border-4 border-white inline-block max-w-sm mx-auto backdrop-blur-sm relative">
+                    <!-- 設定按鈕 -->
+                    <button onclick="resetData()" class="absolute top-4 right-4 text-gray-300 hover:text-red-400 transition" title="清除所有進度"><i class="fas fa-trash-alt"></i></button>
+                    
+                    <p class="text-purple-800 font-black text-lg sm:text-xl mb-3 border-b border-purple-100 pb-2">準備好挑戰 4U 英文單字了嗎？</p>
+                    <ul class="text-gray-600 text-sm text-left mb-4 space-y-2 font-bold">
+                        <li><i class="fas fa-magic text-pink-400 w-5"></i> <span class="text-pink-600">記憶間隔魔法：</span>不熟單字提高出現率！</li>
+                        <li><i class="fas fa-volume-up text-blue-400 w-5"></i> <span class="text-blue-600">AI 語音精靈：</span>點擊喇叭隨時聽發音。</li>
+                        <li><i class="fas fa-save text-emerald-500 w-5"></i> <span class="text-emerald-600">進度防呆存檔：</span>跳出網頁也能接續上次的挑戰。</li>
+                    </ul>
+                    <p class="text-purple-600 font-black animate-pulse bg-purple-100 py-2 rounded-xl mt-4"><i class="fas fa-hand-point-up"></i> 請從上方選擇任務開始 <i class="fas fa-hand-point-up"></i></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 頁面 2: 魔法閃卡 -->
+        <div id="page-flashcard" class="page-section hidden flex flex-col items-center pt-4 sm:pt-8">
+            <div class="w-full mb-4 flex justify-between items-center text-white font-bold px-2">
+                <span class="bg-white/30 px-3 py-1 rounded-full text-sm">點擊卡片翻面</span>
+                <span class="bg-white/30 px-3 py-1 rounded-full text-sm">熟悉度系統 🧠</span>
+            </div>
+            
+            <div class="perspective-1000 w-full h-80 sm:h-96 cursor-pointer group" onclick="flipFlashcard()">
+                <div id="flashcard-inner" class="relative w-full h-full transform-style-3d">
+                    <div class="card-front bg-white flex flex-col items-center justify-center p-6 border-4 border-pink-200 glow-effect">
+                        <button onclick="playWordAudio(event)" class="absolute top-4 left-4 text-gray-400 hover:text-blue-500 text-2xl p-2 btn-pop transition"><i class="fas fa-volume-up"></i></button>
+                        <div id="fc-mastery-front" class="absolute top-4 right-4 flex items-center bg-yellow-50 px-2 py-1 rounded-full shadow-sm border border-yellow-100"></div>
+                        <h2 id="fc-word" class="text-4xl sm:text-5xl font-black text-gray-800 mb-2 text-center drop-shadow-sm">word</h2>
+                        <p class="text-pink-400 font-bold text-sm mt-6 animate-pulse bg-pink-50 px-4 py-1 rounded-full"><i class="fas fa-sync-alt mr-1"></i>點擊翻面</p>
+                    </div>
+                    <div class="card-back bg-pink-50 flex flex-col justify-center p-6 border-4 border-pink-300 text-center overflow-y-auto">
+                        <button onclick="playWordAudio(event)" class="absolute top-4 left-4 text-pink-400 hover:text-pink-600 text-xl p-2 btn-pop transition"><i class="fas fa-volume-up"></i></button>
+                        <div id="fc-mastery-back" class="absolute top-4 right-4 flex items-center bg-yellow-50 px-2 py-1 rounded-full shadow-sm border border-yellow-100"></div>
+                        <div class="mb-2 mt-4">
+                            <span id="fc-pos" class="bg-pink-200 text-pink-800 px-3 py-1 rounded-full text-sm font-bold mr-2 shadow-sm">pos</span>
+                            <span id="fc-meaning" class="text-2xl sm:text-3xl font-black text-gray-800">meaning</span>
+                        </div>
+                        <div class="mt-6 bg-white p-4 rounded-2xl shadow-sm border border-pink-100 text-left relative">
+                            <span class="absolute -top-3 left-4 bg-white px-2 text-xs font-bold text-pink-400"><i class="fas fa-quote-left mr-1"></i>例句</span>
+                            <p id="fc-example" class="text-gray-700 font-medium leading-relaxed mt-2 text-sm sm:text-base">Example sentence goes here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 評分按鈕 -->
+            <div id="fc-controls" class="w-full flex justify-between mt-8 gap-2 opacity-0 pointer-events-none transition-opacity duration-300">
+                <button onclick="handleFlashcardResult('hard')" class="flex-1 bg-red-100 text-red-700 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg btn-pop hover:bg-red-200 shadow-sm border-2 border-red-200 flex flex-col items-center">
+                    <span class="text-2xl mb-1">💦</span>不熟<span class="text-[10px] sm:text-xs font-normal mt-1 opacity-70">常出現</span>
+                </button>
+                <button onclick="handleFlashcardResult('good')" class="flex-1 bg-yellow-100 text-yellow-700 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg btn-pop hover:bg-yellow-200 shadow-sm border-2 border-yellow-200 flex flex-col items-center">
+                    <span class="text-2xl mb-1">🤔</span>普通<span class="text-[10px] sm:text-xs font-normal mt-1 opacity-70">維持現狀</span>
+                </button>
+                <button onclick="handleFlashcardResult('easy')" class="flex-1 bg-green-100 text-green-700 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg btn-pop hover:bg-green-200 shadow-sm border-2 border-green-200 flex flex-col items-center">
+                    <span class="text-2xl mb-1">✨</span>熟練<span class="text-[10px] sm:text-xs font-normal mt-1 opacity-70">+10 EXP</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 頁面 3: 選擇題 (共用) -->
+        <div id="page-quiz" class="page-section hidden flex flex-col pt-4">
+            <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-xl mb-4 text-center border-t-8 border-blue-400 relative overflow-hidden" id="quiz-header">
+                <div class="absolute -top-4 -left-4 text-blue-100 text-5xl sm:text-6xl" id="quiz-bg-icon"><i class="fas fa-question-circle"></i></div>
+                <button id="quiz-audio-btn" onclick="playQuizAudio()" class="absolute top-4 right-4 text-gray-400 hover:text-blue-500 text-2xl btn-pop hidden"><i class="fas fa-volume-up"></i></button>
+                <p id="quiz-title-desc" class="text-xs sm:text-sm text-gray-500 font-bold mb-2 z-10 relative">請問以下單字/意思的對應是？</p>
+                <h2 id="quiz-question" class="text-2xl sm:text-4xl font-black text-gray-800 z-10 relative break-words">Question</h2>
+            </div>
+            <div id="quiz-options" class="grid grid-cols-2 gap-2 sm:gap-3"></div>
+        </div>
+
+        <!-- 全新：頁面 生存戰 -->
+        <div id="page-survival" class="page-section hidden flex flex-col pt-2">
+            <div class="bg-emerald-800 rounded-3xl p-5 sm:p-6 mb-4 relative overflow-hidden text-center border-4 border-emerald-600 shadow-xl">
+                <div class="absolute inset-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-400 via-emerald-800 to-black"></div>
+                
+                <div class="flex justify-between items-center relative z-10 mb-4">
+                    <div class="bg-emerald-900/50 px-3 py-1 rounded-full border border-emerald-500/50">
+                        <span class="text-emerald-300 font-bold text-xs sm:text-sm">最高連勝: <span id="survival-highscore" class="text-white text-lg ml-1">0</span></span>
+                    </div>
+                    <div class="bg-emerald-900/50 px-3 py-1 rounded-full border border-emerald-500/50">
+                        <span class="text-emerald-300 font-bold text-xs sm:text-sm">目前分數: <span id="survival-score" class="text-white text-lg ml-1">0</span></span>
+                    </div>
+                </div>
+                
+                <div class="relative z-10 flex justify-center gap-2 mb-4 text-3xl sm:text-4xl drop-shadow-md">
+                    <span id="heart-1" class="text-red-500 transition-all duration-300">❤️</span>
+                    <span id="heart-2" class="text-red-500 transition-all duration-300">❤️</span>
+                    <span id="heart-3" class="text-red-500 transition-all duration-300">❤️</span>
+                </div>
+                
+                <p class="text-emerald-200 text-sm font-bold relative z-10 mb-1">抵禦魔法攻擊，你能撐幾題？</p>
+            </div>
+
+            <div class="bg-white rounded-3xl p-4 shadow-xl border-t-8 border-emerald-500 relative">
+                <button onclick="playQuizAudio()" class="absolute top-4 left-4 text-gray-400 hover:text-emerald-500 text-xl btn-pop"><i class="fas fa-volume-up"></i></button>
+                <h2 id="survival-question" class="text-2xl sm:text-3xl font-black text-center mb-6 mt-6 text-gray-800">Word</h2>
+                <div id="survival-options" class="grid grid-cols-2 gap-2 sm:gap-3"></div>
+            </div>
+            
+            <!-- 生存戰開始畫面覆蓋 -->
+            <div id="survival-start-screen" class="absolute inset-0 bg-white/95 backdrop-blur-sm z-20 flex flex-col items-center justify-center rounded-3xl m-4 border-4 border-emerald-300">
+                <div class="text-8xl mb-4 floating">🛡️</div>
+                <h2 class="text-3xl font-black text-emerald-700 mb-2">極限生存戰</h2>
+                <p class="text-gray-500 font-bold text-sm mb-6 text-center px-4">你有 3 顆愛心生命<br>答錯即扣血，挑戰最高連勝！</p>
+                <button onclick="startSurvivalGame()" class="bg-gradient-to-r from-emerald-400 to-emerald-600 text-white text-xl font-black py-4 px-10 rounded-full shadow-lg btn-pop hover:scale-105 transition-transform">
+                    開始挑戰
+                </button>
+            </div>
+        </div>
+
+        <!-- 頁面 4: 記憶翻牌 -->
+        <div id="page-memory" class="page-section hidden pt-4">
+            <div class="flex justify-between items-center mb-4 text-white font-bold bg-purple-800/20 p-3 rounded-2xl backdrop-blur-sm shadow-sm">
+                <span>配對次數: <span id="memory-moves" class="text-yellow-300 text-lg">0</span></span>
+                <span>剩餘: <span id="memory-pairs" class="text-pink-300 text-lg">6</span> 對</span>
+            </div>
+            <div id="memory-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-4"></div>
+            <button onclick="initMemoryGame()" class="mt-8 w-full bg-white text-purple-600 font-bold py-4 rounded-2xl shadow-md hover:bg-purple-50 btn-pop border-2 border-purple-100">
+                <i class="fas fa-redo mr-2"></i> 重新發牌
+            </button>
+        </div>
+
+        <!-- 頁面 5: 魔王戰鬥 -->
+        <div id="page-boss" class="page-section hidden pt-2">
+            <div class="bg-gray-900 rounded-3xl p-5 sm:p-6 mb-4 relative overflow-hidden text-center border-4 border-gray-700 shadow-2xl">
+                <div class="absolute inset-0 opacity-30 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-600 via-gray-900 to-black"></div>
+                <div class="flex justify-between items-center relative z-10 mb-2">
+                    <h3 class="text-red-400 font-bold text-sm sm:text-base"><i class="fas fa-skull mr-1"></i> 野生角落怪獸</h3>
+                    <div id="boss-combo-container" class="hidden bg-yellow-500 text-yellow-900 px-3 py-1 rounded-full font-black text-xs sm:text-sm shadow-[0_0_10px_rgba(234,179,8,0.8)] border border-yellow-200">
+                        <i class="fas fa-fire"></i> <span id="boss-combo-text">2</span> COMBO!
+                    </div>
+                </div>
+                <div id="boss-sprite" class="text-7xl sm:text-8xl floating my-4 relative z-10 transition-transform duration-100 drop-shadow-[0_0_15px_rgba(255,0,0,0.5)]">🦖</div>
+                <div class="relative z-10 w-full bg-gray-800 rounded-full h-4 sm:h-5 mb-1 border-2 border-gray-600 overflow-hidden shadow-inner">
+                    <div id="boss-hp" class="bg-gradient-to-r from-red-600 to-red-400 h-full rounded-full hp-bar-fill" style="width: 100%"></div>
+                </div>
+                <div class="text-right text-xs text-red-300 relative z-10 font-bold">HP: <span id="boss-hp-text">100</span>/100</div>
+            </div>
+            <div class="bg-white rounded-3xl p-4 shadow-xl border-t-8 border-red-500 relative">
+                <button onclick="playQuizAudio()" class="absolute top-4 left-4 text-gray-400 hover:text-blue-500 text-xl btn-pop"><i class="fas fa-volume-up"></i></button>
+                <div class="flex justify-end items-center mb-4">
+                    <span id="boss-timer" class="text-red-600 font-black bg-red-100 border border-red-200 px-4 py-1 rounded-full text-sm shadow-sm flex items-center gap-1">
+                        <i class="fas fa-hourglass-half animate-pulse"></i> <span>10.0s</span>
+                    </span>
+                </div>
+                <h2 id="boss-question" class="text-2xl sm:text-3xl font-black text-center mb-6 text-gray-800">Word</h2>
+                <div id="boss-options" class="grid grid-cols-2 gap-2 sm:gap-3"></div>
+            </div>
+        </div>
+
+        <!-- 頁面 6: 錯題筆記本 -->
+        <div id="page-review" class="page-section hidden flex flex-col pt-4">
+            <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-xl mb-4 border-t-8 border-orange-400 relative overflow-hidden">
+                <i class="fas fa-book-dead absolute -right-4 -bottom-4 text-orange-100 text-8xl opacity-50 z-0"></i>
+                <div class="relative z-10">
+                    <h2 class="text-2xl font-black text-gray-800 mb-2"><i class="fas fa-book-open text-orange-500"></i> 錯題筆記本</h2>
+                    <p class="text-gray-500 text-sm mb-4">被標記「不熟」或答錯的單字會被抓進來。目前有 <span id="wrong-word-count" class="text-orange-600 font-black text-lg bg-orange-50 px-2 rounded">0</span> 隻怪獸！</p>
+                    <div class="flex gap-2">
+                        <button onclick="startReviewQuiz()" class="flex-1 bg-gradient-to-r from-orange-400 to-orange-500 text-white py-3 rounded-2xl font-bold btn-pop shadow-md flex flex-col items-center justify-center">
+                            <i class="fas fa-dumbbell mb-1 text-lg"></i> 特訓開始
+                        </button>
+                        <button onclick="downloadWrongWords()" class="flex-1 bg-white text-gray-700 py-3 rounded-2xl font-bold btn-pop hover:bg-gray-50 border-2 border-gray-200 shadow-sm flex flex-col items-center justify-center">
+                            <i class="fas fa-file-csv mb-1 text-lg text-green-600"></i> 匯出名單
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="wrong-words-list" class="flex flex-col gap-3 overflow-y-auto max-h-[50vh] hide-scrollbar pb-10"></div>
+        </div>
+
+    </main>
+
+    <!-- 成功/失敗/升級 浮水印回饋 -->
+    <div id="feedback-overlay" class="fixed inset-0 pointer-events-none flex items-center justify-center z-[100] opacity-0 transition-opacity duration-200 bg-white/20 backdrop-blur-sm">
+        <div class="flex flex-col items-center">
+            <div id="feedback-icon" class="text-8xl sm:text-9xl drop-shadow-2xl scale-50 transition-transform duration-300"></div>
+            <div id="feedback-text" class="mt-4 text-2xl font-black text-white drop-shadow-md hidden combo-anim text-center px-4 leading-tight"></div>
+        </div>
+    </div>
+
+    <!-- JavaScript 邏輯 -->
+    <script>
+        // --- 核心資料 ---
+        const rawData = [
+            {unit:1, word:"bowling alley", pos:"n.", meaning:"保齡球館", example:"They spent the afternoon playing at the bowling alley."},
+            {unit:1, word:"panic", pos:"v.", meaning:"恐慌", example:"Don't panic! We still have time to catch the bus."},
+            {unit:1, word:"normal", pos:"a.", meaning:"正常的", example:"It's normal to feel nervous before a big speech."},
+            {unit:1, word:"technique", pos:"n.", meaning:"技巧；技術", example:"She learned a new technique for drawing portraits."},
+            {unit:1, word:"grip", pos:"v.", meaning:"抓；緊握", example:"Grip the handle firmly so it doesn't slip."},
+            {unit:1, word:"firmly", pos:"adv.", meaning:"堅固地；緊緊地", example:"Make sure the lid is closed firmly."},
+            {unit:1, word:"tightly", pos:"adv.", meaning:"緊緊地", example:"He held onto the rope tightly."},
+            {unit:1, word:"concentrate on...", pos:"phr.", meaning:"專注於...", example:"I need a quiet room to concentrate on my homework."},
+            {unit:1, word:"chest", pos:"n.", meaning:"胸膛", example:"He crossed his arms over his chest."},
+            {unit:1, word:"swing", pos:"v.", meaning:"揮動；擺動", example:"The golfer practiced his swing."},
+            {unit:1, word:"roll off sth.", pos:"phr.", meaning:"從...滾落", example:"The ball rolled off the table."},
+            {unit:1, word:"smoothly", pos:"adv.", meaning:"平穩地；順利地", example:"The event ran very smoothly."},
+            {unit:1, word:"gutter", pos:"n.", meaning:"洗溝(保齡球)；排水溝", example:"My ball went straight into the gutter."},
+            {unit:1, word:"wrist", pos:"n.", meaning:"手腕", example:"She sprained her wrist while playing tennis."},
+            {unit:1, word:"improve", pos:"v.", meaning:"改善；進步", example:"You need to practice every day to improve your English."},
+            {unit:1, word:"accurate", pos:"a.", meaning:"準確的", example:"Please make sure your calculations are accurate."},
+            {unit:1, word:"adjust", pos:"v.", meaning:"調整", example:"Adjust the seat before you start driving."},
+            {unit:1, word:"posture", pos:"n.", meaning:"姿勢", example:"Good posture can help prevent back pain."},
+            {unit:1, word:"strike", pos:"n.", meaning:"全倒", example:"He cheered loudly when he bowled a strike."},
+            {unit:1, word:"spare", pos:"n.", meaning:"補中", example:"She barely managed to pick up the spare."},
+            {unit:1, word:"watch for", pos:"phr.", meaning:"注意；留意", example:"Watch for incoming cars when you cross the street."},
+            {unit:1, word:"release", pos:"v.", meaning:"釋放；鬆開", example:"Release the ball at the right moment."},
+            {unit:1, word:"steady", pos:"a.", meaning:"穩定的", example:"Keep a steady pace so you don't get tired too quickly."},
+            {unit:1, word:"stance", pos:"n.", meaning:"站姿", example:"The batter took a wide stance."},
+            {unit:1, word:"stable", pos:"a.", meaning:"穩固的", example:"Make sure the ladder is stable before climbing."},
+            {unit:1, word:"tricky", pos:"a.", meaning:"困難的；棘手的", example:"This math puzzle is quite tricky."},
+            {unit:1, word:"aim at sth.", pos:"phr.", meaning:"瞄準...", example:"Aim at the center of the target."},
+            {unit:1, word:"spot", pos:"n.", meaning:"地點；斑點", example:"This is a great spot for a picnic."},
+            {unit:1, word:"timing", pos:"n.", meaning:"時機", example:"Perfect timing is the key to telling a good joke."},
+            {unit:1, word:"make sure that...", pos:"phr.", meaning:"確保...", example:"Make sure that the door is locked."},
+            {unit:1, word:"let go of sth.", pos:"phr.", meaning:"放開...", example:"Don't let go of my hand in the crowd."},
+            {unit:1, word:"knock down", pos:"phr.", meaning:"擊倒", example:"Try to knock down all the pins."},
+            {unit:1, word:"keep going", pos:"phr.", meaning:"繼續", example:"It's tough, but you must keep going."},
+            {unit:2, word:"When it comes to N/Ving", pos:"phr.", meaning:"說到...", example:"When it comes to math, he is a genius."},
+            {unit:2, word:"there’s no Ving…", pos:"phr.", meaning:"不可能...", example:"There's no denying that she is talented."},
+            {unit:2, word:"classic", pos:"a.", meaning:"經典的", example:"This is a classic example of a romantic comedy."},
+            {unit:2, word:"grind", pos:"v.", meaning:"磨碎", example:"You need to grind the coffee beans first."},
+            {unit:2, word:"grain", pos:"n.", meaning:"穀物；顆粒", example:"Rice is an important grain in Asia."},
+            {unit:2, word:"fine", pos:"a.", meaning:"細的；細緻的", example:"Grind the sugar into a fine powder."},
+            {unit:2, word:"powder", pos:"n.", meaning:"粉末", example:"The baby's skin was covered in white powder."},
+            {unit:2, word:"pour", pos:"v.", meaning:"倒；灌", example:"Can you pour me some hot tea?"},
+            {unit:2, word:"thick", pos:"a.", meaning:"濃稠的；厚的", example:"This soup is too thick."},
+            {unit:2, word:"version", pos:"n.", meaning:"版本", example:"I prefer the original version of the song."},
+            {unit:2, word:"promote", pos:"v.", meaning:"推廣；促進", example:"The new campaign aims to promote recycling."},
+            {unit:2, word:"community", pos:"n.", meaning:"社區；社群", example:"He volunteers at the local community center."},
+            {unit:2, word:"savory", pos:"a.", meaning:"鹹的；香噴噴的", example:"We baked some savory cheese scones."},
+            {unit:2, word:"origin", pos:"n.", meaning:"起源；由來", example:"The origin of this festival is quite interesting."},
+            {unit:2, word:"battle", pos:"n.", meaning:"戰鬥", example:"He lost his battle against the disease."},
+            {unit:2, word:"swiftly", pos:"adv.", meaning:"迅速地", example:"She answered the question swiftly."},
+            {unit:2, word:"recover", pos:"v.", meaning:"恢復；康復", example:"It took him weeks to recover from the cold."},
+            {unit:2, word:"strength", pos:"n.", meaning:"力量", example:"I don't have the strength to lift this box."},
+            {unit:2, word:"grab", pos:"v.", meaning:"抓；攫取", example:"He grabbed his coat and ran out."},
+            {unit:2, word:"mortar", pos:"n.", meaning:"研缽；臼", example:"She crushed the garlic in a mortar."},
+            {unit:2, word:"groove", pos:"n.", meaning:"溝槽", example:"The sliding door runs along a groove."},
+            {unit:2, word:"depend on", pos:"phr.", meaning:"依賴；取決於", example:"The outcome will depend on your effort."},
+            {unit:2, word:"ingredient", pos:"n.", meaning:"成分；原料", example:"Coconut milk is a key ingredient in this dish."},
+            {unit:2, word:"process", pos:"v.", meaning:"加工；處理", example:"The factory processes fresh fruit into juice."},
+            {unit:2, word:"mixture", pos:"n.", meaning:"混合物", example:"Stir the mixture until it is smooth."},
+            {unit:2, word:"smooth", pos:"a.", meaning:"滑順的；平滑的", example:"The lotion makes your skin feel smooth."},
+            {unit:2, word:"ordinary", pos:"a.", meaning:"平凡的；普通的", example:"It was just an ordinary weekend."},
+            {unit:2, word:"specific", pos:"a.", meaning:"特定的；明確的", example:"Is there a specific color you want?"},
+            {unit:2, word:"gradually", pos:"adv.", meaning:"逐漸地", example:"The weather is gradually getting warmer."},
+            {unit:2, word:"wear down", pos:"phr.", meaning:"磨損", example:"The tires will wear down over time."},
+            {unit:2, word:"for this reason", pos:"phr.", meaning:"因此；因為這個原因", example:"He was sick, and for this reason, he stayed home."},
+            {unit:2, word:"trunk", pos:"n.", meaning:"樹幹", example:"The elephant wrapped its trunk around the branch."},
+            {unit:2, word:"be regarded as", pos:"phr.", meaning:"被視為...", example:"He is regarded as the best doctor in town."},
+            {unit:2, word:"ideal", pos:"a.", meaning:"理想的", example:"This sunny weather is ideal for a picnic."},
+            {unit:2, word:"material", pos:"n.", meaning:"材料；原料", example:"Wood is a common building material."},
+            {unit:2, word:"at first glance", pos:"phr.", meaning:"乍看之下", example:"At first glance, the problem seemed easy."},
+            {unit:2, word:"challenging", pos:"a.", meaning:"具挑戰性的", example:"This job is tough but highly challenging."},
+            {unit:2, word:"combine A with B", pos:"phr.", meaning:"結合 A 與 B", example:"Combine the flour with the eggs."},
+            {unit:2, word:"trend", pos:"v.", meaning:"趨向；流行", example:"This new fashion style is trending online."},
+            {unit:2, word:"shine a spotlight on...", pos:"phr.", meaning:"將焦點放在...", example:"The documentary shines a spotlight on environmental issues."},
+            {unit:3, word:"dementia", pos:"n.", meaning:"失智症", example:"His grandfather suffers from dementia."},
+            {unit:3, word:"concern", pos:"n.", meaning:"擔憂；關心(C)", example:"There is growing concern about global warming."}
+        ].map((item, index) => ({ ...item, id: index, score: 100, wrongCount: 0 }));
+
+        // --- 全域狀態 ---
+        let currentTask = 'menu';
+        let currentWordIndex = -1;
+        let isFlashcardFlipped = false;
+        
+        let memoryCards = [];
+        let flippedMemoryCards = [];
+        let memoryMoves = 0;
+        let memoryPairsLeft = 6;
+        
+        let bossTimer = null;
+        let bossHp = 100;
+        let bossTimeLeft = 10;
+        let bossCombo = 0; 
+        
+        let isReviewMode = false;
+        
+        // 生存戰狀態
+        let survivalHearts = 3;
+        let survivalScore = 0;
+        let survivalHighScore = 0;
+        let isSurvivalMode = false;
+
+        // RPG 狀態
+        let userLevel = 1;
+        let userExp = 0;
+        const expPerLevel = 100;
+
+        // --- 進度存檔系統 (Local Storage) ---
+        const STORAGE_KEY = 'macaronMagicData_v2'; // 更新 key 避免舊資料衝突
+
+        function saveData() {
+            const dataToSave = {
+                level: userLevel,
+                exp: userExp,
+                highScore: survivalHighScore,
+                lastTask: currentTask, // 新增：記錄學生最後停留的頁面任務
+                words: rawData.map(w => ({ id: w.id, score: w.score, wrongCount: w.wrongCount }))
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+            } catch(e) { console.error("無法儲存進度", e); }
+        }
+
+        function loadData() {
+            let lastTaskToLoad = 'menu'; // 預設回到主選單
+            
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if(saved) {
+                    const data = JSON.parse(saved);
+                    userLevel = data.level || 1;
+                    userExp = data.exp || 0;
+                    survivalHighScore = data.highScore || 0;
+                    
+                    // 讀取最後離開的頁面
+                    if(data.lastTask) {
+                        lastTaskToLoad = data.lastTask;
+                    }
+                    
+                    if(data.words) {
+                        data.words.forEach(savedWord => {
+                            let w = rawData.find(x => x.id === savedWord.id);
+                            if(w) {
+                                w.score = savedWord.score;
+                                w.wrongCount = savedWord.wrongCount;
+                            }
+                        });
+                    }
+                }
+            } catch(e) { console.error("無法載入進度", e); }
+            
+            updateLevelUI(false); 
+            
+            // 系統載入完成後，自動跳轉到最後離開的頁面
+            if (lastTaskToLoad && lastTaskToLoad !== 'menu') {
+                startTask(lastTaskToLoad);
+            } else {
+                startTask('menu'); // 確保 menu 也會正確初始化
+            }
+        }
+
+        function resetData() {
+            if(confirm("⚠️ 確定要清除所有紀錄（包含等級、錯題本、最高分）嗎？此動作無法復原！")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        // 初始化載入
+        window.onload = loadData;
+
+        // --- RPG 稱號系統 ---
+        function getTitle(lv) {
+            if(lv >= 50) return { title: "🧙‍♂️ 魔法校長", color: "text-purple-600" };
+            if(lv >= 30) return { title: "👑 傳奇單字大師", color: "text-yellow-600" };
+            if(lv >= 15) return { title: "🧚 高階法師", color: "text-emerald-500" };
+            if(lv >= 10) return { title: "🪄 正式巫師", color: "text-blue-500" };
+            if(lv >= 5) return { title: "📖 見習巫師", color: "text-pink-500" };
+            return { title: "🐣 魔法學徒", color: "text-gray-500" };
+        }
+
+        function updateLevelUI(showAnim = true) {
+            document.getElementById('user-level').innerText = userLevel;
+            let percentage = Math.min(100, (userExp / expPerLevel) * 100);
+            document.getElementById('user-exp-bar').style.width = `${percentage}%`;
+            
+            let titleObj = getTitle(userLevel);
+            let titleEl = document.getElementById('user-title');
+            titleEl.innerText = titleObj.title;
+            titleEl.className = `text-[10px] mb-0.5 ${titleObj.color}`;
+            
+            saveData();
+        }
+
+        function gainExp(amount) {
+            userExp += amount;
+            let leveledUp = false;
+            while (userExp >= expPerLevel) {
+                userExp -= expPerLevel;
+                userLevel++;
+                leveledUp = true;
+            }
+            updateLevelUI();
+            
+            if(leveledUp) {
+                playSound('levelup');
+                let newTitle = getTitle(userLevel).title;
+                showVisualFeedback('levelup', `解鎖稱號：\n${newTitle}`);
+            }
+        }
+
+        // --- TTS 語音朗讀系統 ---
+        let currentSpeakingWord = "";
+        function speakWord(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                let utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.85; 
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function playWordAudio(e) {
+            if(e) e.stopPropagation(); 
+            if(currentWordIndex !== -1) {
+                let w = rawData.find(x => x.id === currentWordIndex);
+                if(w) speakWord(w.word);
+            }
+        }
+        
+        function playQuizAudio() {
+            if(currentSpeakingWord) speakWord(currentSpeakingWord);
+        }
+
+        // --- 音效與特效系統 ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1); 
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'wrong') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'hit') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'levelup') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(554.37, audioCtx.currentTime + 0.1);
+                osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+
+        function triggerConfetti() {
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, colors: ['#FFD1DC', '#E0BBE4', '#957DAD', '#FFF8C6', '#6EE7B7'] });
+        }
+
+        function showVisualFeedback(type, extraText = "") {
+            const overlay = document.getElementById('feedback-overlay');
+            const icon = document.getElementById('feedback-icon');
+            const textEl = document.getElementById('feedback-text');
+            
+            overlay.classList.remove('opacity-0');
+            textEl.classList.add('hidden');
+            
+            if (type === 'correct') {
+                icon.innerHTML = '✨⭕✨';
+                icon.className = 'text-7xl sm:text-9xl drop-shadow-2xl transition-all duration-300 transform scale-100 text-green-400';
+                triggerConfetti();
+            } else if (type === 'wrong') {
+                icon.innerHTML = '💦❌💦';
+                icon.className = 'text-7xl sm:text-9xl drop-shadow-2xl transition-all duration-300 transform scale-100 text-red-500';
+            } else if (type === 'levelup') {
+                icon.innerHTML = '🌟👑🌟';
+                icon.className = 'text-7xl sm:text-9xl drop-shadow-2xl transition-all duration-300 transform scale-100 text-yellow-400 glow-effect';
+                textEl.innerText = "LEVEL UP!\n" + extraText;
+                textEl.classList.remove('hidden');
+                textEl.className = "mt-4 text-2xl font-black text-yellow-300 drop-shadow-lg combo-anim text-center leading-tight";
+                triggerConfetti(); setTimeout(triggerConfetti, 200);
+            } else if (type === 'combo') {
+                icon.innerHTML = '🔥';
+                icon.className = 'text-6xl sm:text-8xl drop-shadow-2xl transition-all duration-300 transform scale-100 text-orange-500';
+                textEl.innerText = extraText;
+                textEl.classList.remove('hidden');
+                textEl.className = "mt-2 text-3xl font-black text-orange-400 drop-shadow-lg combo-anim italic text-center";
+            }
+
+            setTimeout(() => {
+                icon.classList.replace('scale-100', 'scale-50');
+                overlay.classList.add('opacity-0');
+            }, type === 'levelup' ? 2500 : 800);
+        }
+
+        // --- 核心演算法：Spaced Repetition ---
+        function getWeightedRandomWord() {
+            let pool = isReviewMode ? rawData.filter(w => w.wrongCount > 0) : rawData;
+            if(pool.length === 0) return rawData[0];
+            
+            let totalWeight = pool.reduce((sum, word) => sum + word.score, 0);
+            let randomNum = Math.random() * totalWeight;
+            for (let i = 0; i < pool.length; i++) {
+                randomNum -= pool[i].score;
+                if (randomNum <= 0) return pool[i];
+            }
+            return pool[0];
+        }
+
+        function updateWordScore(wordId, isFamiliar) {
+            let word = rawData.find(w => w.id === wordId);
+            if (!word) return;
+            
+            if (isFamiliar) {
+                word.score = Math.max(10, Math.floor(word.score / 2));
+                if (word.wrongCount > 0) word.wrongCount--; 
+                gainExp(10); 
+            } else {
+                word.score = Math.min(1000, word.score * 2.5);
+                word.wrongCount++; 
+            }
+            saveData(); // 存檔
+        }
+
+        // --- 頁面導航 ---
+        function showPage(pageId) {
+            initAudio(); 
+            document.querySelectorAll('.page-section').forEach(el => el.classList.add('hidden'));
+            
+            let domId = (pageId === 'en-ch' || pageId === 'ch-en') ? 'quiz' : pageId;
+            if(pageId === 'survival') domId = 'survival';
+            
+            document.getElementById(`page-${domId}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.task-tab').forEach(tab => {
+                tab.classList.remove('ring-4', 'ring-purple-300', 'scale-105', 'shadow-md', 'bg-opacity-100');
+                tab.classList.add('opacity-70');
+            });
+            
+            if(pageId !== 'menu') {
+                const activeTab = document.getElementById(`tab-${pageId}`);
+                if(activeTab) {
+                    activeTab.classList.add('ring-4', 'ring-purple-300', 'scale-105', 'shadow-md', 'bg-opacity-100');
+                    activeTab.classList.remove('opacity-70');
+                    activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }
+            }
+
+            if(bossTimer) clearInterval(bossTimer);
+            window.speechSynthesis.cancel();
+        }
+
+        function startTask(task) {
+            if(task !== 'en-ch' || !isReviewMode) isReviewMode = false;
+            if(task !== 'survival') isSurvivalMode = false;
+            
+            currentTask = task;
+            saveData(); // 切換任務時立刻存檔，記住最後畫面
+            
+            showPage(task);
+            
+            if(task === 'flashcard') nextFlashcard();
+            if(task === 'en-ch' || task === 'ch-en') {
+                const qHeader = document.getElementById('quiz-header');
+                const qIcon = document.getElementById('quiz-bg-icon');
+                const audioBtn = document.getElementById('quiz-audio-btn');
+                
+                if(task === 'en-ch') audioBtn.classList.remove('hidden');
+                else audioBtn.classList.add('hidden');
+
+                if(isReviewMode) {
+                    qHeader.className = "bg-orange-50 rounded-3xl p-5 shadow-xl mb-4 text-center border-t-8 border-orange-500 relative overflow-hidden";
+                    qIcon.className = "absolute -top-4 -left-4 text-orange-200 text-6xl";
+                    qIcon.innerHTML = '<i class="fas fa-ghost"></i>';
+                    document.getElementById('quiz-title-desc').innerText = "錯題特訓：消滅這隻小怪獸！";
+                } else {
+                    qHeader.className = "bg-white rounded-3xl p-5 shadow-xl mb-4 text-center border-t-8 border-blue-400 relative overflow-hidden";
+                    qIcon.className = "absolute -top-4 -left-4 text-blue-100 text-6xl";
+                    qIcon.innerHTML = '<i class="fas fa-question-circle"></i>';
+                    document.getElementById('quiz-title-desc').innerText = "請問以下單字/意思的對應是？";
+                }
+                nextQuiz();
+            }
+            if(task === 'memory') initMemoryGame();
+            if(task === 'boss') initBossBattle();
+            if(task === 'review') renderReviewPage();
+            if(task === 'survival') {
+                document.getElementById('survival-start-screen').classList.remove('hidden');
+                document.getElementById('survival-highscore').innerText = survivalHighScore;
+            }
+        }
+
+        // --- 錯題筆記本 ---
+        function renderReviewPage() {
+            let wrongWords = rawData.filter(w => w.wrongCount > 0).sort((a,b) => b.wrongCount - a.wrongCount);
+            document.getElementById('wrong-word-count').innerText = wrongWords.length;
+            let listEl = document.getElementById('wrong-words-list');
+            listEl.innerHTML = '';
+            
+            if(wrongWords.length === 0) {
+                listEl.innerHTML = `
+                    <div class="text-center text-gray-500 py-10 mt-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                        <div class="text-6xl mb-4 floating">👻✨</div>
+                        <p class="font-bold text-xl">太完美了！</p>
+                        <p class="text-sm mt-2">目前沒有錯題小怪獸，繼續保持喔！</p>
+                    </div>`;
+                return;
+            }
+
+            wrongWords.forEach(w => {
+                listEl.innerHTML += `
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-orange-400 flex justify-between items-center transition hover:bg-orange-50">
+                        <div>
+                            <div class="font-black text-lg text-gray-800 flex items-center gap-2">
+                                ${w.word}
+                                <button onclick="speakWord('${w.word.replace(/'/g, "\\'")}')" class="text-gray-400 hover:text-blue-500 text-sm"><i class="fas fa-volume-up"></i></button>
+                            </div>
+                            <div class="text-sm text-gray-600 font-bold">${w.pos} ${w.meaning}</div>
+                        </div>
+                        <div class="flex flex-col items-end">
+                            <span class="text-xs text-orange-600 bg-orange-100 px-3 py-1 rounded-full font-black"><i class="fas fa-times-circle"></i> 錯 ${w.wrongCount} 次</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function startReviewQuiz() {
+            let wrongWords = rawData.filter(w => w.wrongCount > 0);
+            if(wrongWords.length === 0) {
+                alert("✨ 太棒了！目前沒有錯題需要特訓！"); return;
+            }
+            isReviewMode = true;
+            startTask('en-ch');
+        }
+
+        function downloadCSV(content, filename) {
+            let blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), content], {type: "text/csv;charset=utf-8"});
+            let link = document.createElement("a");
+            if (link.download !== undefined) { 
+                let url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            }
+        }
+
+        function downloadWrongWords() {
+            let wrongWords = rawData.filter(w => w.wrongCount > 0).sort((a,b) => b.wrongCount - a.wrongCount);
+            if(wrongWords.length === 0) { alert("✨ 目前沒有錯題可以下載喔！"); return; }
+            let csvContent = "英文單字,詞性,中文意思,錯誤次數,例句\n";
+            wrongWords.forEach(w => {
+                let safeWord = w.word ? `"${w.word.toString().replace(/"/g, '""')}"` : '""';
+                let safePos = w.pos ? `"${w.pos.toString().replace(/"/g, '""')}"` : '""';
+                let safeMeaning = w.meaning ? `"${w.meaning.toString().replace(/"/g, '""')}"` : '""';
+                let safeExample = w.example ? `"${w.example.toString().replace(/"/g, '""')}"` : '""';
+                csvContent += `${safeWord},${safePos},${safeMeaning},${w.wrongCount},${safeExample}\n`;
+            });
+            downloadCSV(csvContent, "魔法學院錯題名單.csv");
+        }
+
+        // --- 任務一：魔法閃卡 ---
+        function nextFlashcard() {
+            let word = getWeightedRandomWord();
+            currentWordIndex = word.id;
+            isFlashcardFlipped = false;
+            
+            let masteryHtml = '';
+            if (word.score <= 25) masteryHtml = '<i class="fas fa-star text-yellow-400"></i><i class="fas fa-star text-yellow-400"></i><i class="fas fa-star text-yellow-400"></i><span class="text-[10px] sm:text-xs text-yellow-600 font-bold ml-1">熟練</span>';
+            else if (word.score <= 100) masteryHtml = '<i class="fas fa-star text-yellow-400"></i><i class="fas fa-star text-yellow-400"></i><i class="far fa-star text-yellow-200"></i><span class="text-[10px] sm:text-xs text-yellow-600 font-bold ml-1">普通</span>';
+            else masteryHtml = '<i class="fas fa-star text-yellow-400"></i><i class="far fa-star text-yellow-200"></i><i class="far fa-star text-yellow-200"></i><span class="text-[10px] sm:text-xs text-red-400 font-bold ml-1">不熟</span>';
+            
+            document.getElementById('fc-mastery-front').innerHTML = masteryHtml;
+            document.getElementById('fc-mastery-back').innerHTML = masteryHtml;
+
+            document.getElementById('flashcard-inner').classList.remove('rotate-y-180');
+            document.getElementById('fc-controls').classList.add('opacity-0', 'pointer-events-none');
+            
+            document.getElementById('fc-word').innerText = word.word;
+            document.getElementById('fc-pos').innerText = word.pos;
+            document.getElementById('fc-meaning').innerText = word.meaning;
+            document.getElementById('fc-example').innerText = word.example;
+            
+            speakWord(word.word); 
+        }
+
+        function flipFlashcard() {
+            if(isFlashcardFlipped) return; 
+            playSound('success');
+            isFlashcardFlipped = true;
+            document.getElementById('flashcard-inner').classList.add('rotate-y-180');
+            setTimeout(() => { document.getElementById('fc-controls').classList.remove('opacity-0', 'pointer-events-none'); }, 300);
+        }
+
+        function handleFlashcardResult(rating) {
+            if (rating === 'easy') {
+                updateWordScore(currentWordIndex, true);
+                playSound('success');
+                showVisualFeedback('correct');
+            } else if (rating === 'hard') {
+                updateWordScore(currentWordIndex, false);
+                playSound('wrong');
+            } else {
+                let w = rawData.find(x => x.id === currentWordIndex);
+                if(w) { w.score = Math.max(10, Math.floor(w.score * 0.8)); saveData(); }
+            }
+            nextFlashcard();
+        }
+
+        // --- 任務二 & 三：選擇題 ---
+        function getDistractors(correctWord, count) {
+            let distractors = [];
+            let samePosWords = rawData.filter(w => w.pos === correctWord.pos && w.id !== correctWord.id).sort(() => Math.random() - 0.5);
+            for (let i = 0; i < samePosWords.length && distractors.length < count; i++) distractors.push(samePosWords[i]);
+            
+            if (distractors.length < count) {
+                let otherWords = rawData.filter(w => w.pos !== correctWord.pos && w.id !== correctWord.id).sort(() => Math.random() - 0.5);
+                for (let i = 0; i < otherWords.length && distractors.length < count; i++) distractors.push(otherWords[i]);
+            }
+            return distractors;
+        }
+
+        function nextQuiz() {
+            if(isReviewMode) {
+                let wrongWords = rawData.filter(w => w.wrongCount > 0);
+                if(wrongWords.length === 0) {
+                    alert("🎉 恭喜！你已經消滅所有的錯題小怪獸了！獲得 50 EXP 獎勵！");
+                    gainExp(50);
+                    startTask('review'); 
+                    return;
+                }
+            }
+
+            let correctWord = getWeightedRandomWord();
+            currentWordIndex = correctWord.id;
+            currentSpeakingWord = correctWord.word;
+            let distractors = getDistractors(correctWord, 3);
+            let options = [correctWord, ...distractors].sort(() => Math.random() - 0.5);
+            
+            const qEl = document.getElementById('quiz-question');
+            const optsEl = document.getElementById('quiz-options');
+            optsEl.innerHTML = '';
+            
+            let isEnToCh = (currentTask === 'en-ch');
+            qEl.innerText = isEnToCh ? correctWord.word : `${correctWord.meaning} (${correctWord.pos})`;
+            
+            if(isEnToCh) speakWord(correctWord.word);
+
+            options.forEach((opt, idx) => {
+                let btn = document.createElement('button');
+                btn.className = "w-full bg-white border-2 border-blue-100 p-3 sm:p-4 rounded-2xl text-sm sm:text-base font-bold text-gray-700 shadow-sm hover:bg-blue-50 hover:border-blue-300 transition btn-pop text-center flex flex-col items-center justify-center min-h-[100px]";
+                
+                if(isReviewMode) btn.className = btn.className.replace('border-blue-100', 'border-orange-100').replace('hover:bg-blue-50', 'hover:bg-orange-50').replace('hover:border-blue-300', 'hover:border-orange-300');
+
+                let optionText = isEnToCh ? `${opt.pos} ${opt.meaning}` : opt.word;
+                let translationText = isEnToCh ? opt.word : `${opt.pos} ${opt.meaning}`;
+                btn.dataset.isCorrect = (opt.id === correctWord.id);
+                btn.dataset.translation = translationText;
+                let badgeColor = isReviewMode ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600';
+
+                btn.innerHTML = `
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 w-full">
+                        <span class="${badgeColor} w-6 h-6 sm:w-8 sm:h-8 rounded-full inline-flex justify-center items-center text-xs sm:text-base shrink-0">${['A','B','C','D'][idx]}</span> 
+                        <span class="leading-tight break-words text-center">${optionText}</span>
+                    </div>
+                    <span class="option-translation text-xs sm:text-sm text-purple-600 font-bold hidden w-full border-t border-gray-100 pt-2 mt-2"></span>
+                `;
+                btn.onclick = () => handleQuizAnswer(btn);
+                optsEl.appendChild(btn);
+            });
+        }
+
+        function handleQuizAnswer(btn) {
+            let isCorrect = btn.dataset.isCorrect === 'true';
+
+            Array.from(document.getElementById('quiz-options').children).forEach(b => {
+                b.onclick = null;
+                let transSpan = b.querySelector('.option-translation');
+                if(transSpan) { transSpan.innerText = b.dataset.translation; transSpan.classList.remove('hidden'); transSpan.classList.add('block'); }
+                if (b.dataset.isCorrect === 'true') {
+                    b.className = b.className.replace(/border-(blue|orange)-100/, 'border-green-400'); b.classList.add('bg-green-50');
+                } else { b.classList.add('opacity-50'); }
+            });
+
+            if (isCorrect) {
+                playSound('success'); showVisualFeedback('correct');
+                updateWordScore(currentWordIndex, true);
+                setTimeout(nextQuiz, 2000); 
+            } else {
+                btn.classList.remove('opacity-50'); 
+                btn.className = btn.className.replace(/border-(blue|orange)-100/, 'border-red-400');
+                btn.classList.add('bg-red-50', 'animate-shake');
+                playSound('wrong'); showVisualFeedback('wrong');
+                updateWordScore(currentWordIndex, false);
+                setTimeout(nextQuiz, 3000); 
+            }
+        }
+
+        // --- 全新任務：生存戰 (Survival Mode) ---
+        function startSurvivalGame() {
+            document.getElementById('survival-start-screen').classList.add('hidden');
+            survivalHearts = 3;
+            survivalScore = 0;
+            isSurvivalMode = true;
+            updateSurvivalUI();
+            nextSurvivalQuestion();
+        }
+
+        function updateSurvivalUI() {
+            document.getElementById('survival-score').innerText = survivalScore;
+            document.getElementById('survival-highscore').innerText = survivalHighScore;
+            for(let i=1; i<=3; i++) {
+                let h = document.getElementById(`heart-${i}`);
+                if(i <= survivalHearts) {
+                    h.classList.remove('heart-break');
+                    h.style.opacity = '1';
+                } else {
+                    if(!h.classList.contains('heart-break')) h.classList.add('heart-break');
+                }
+            }
+        }
+
+        function nextSurvivalQuestion() {
+            let correctWord = getWeightedRandomWord();
+            currentWordIndex = correctWord.id;
+            currentSpeakingWord = correctWord.word;
+            speakWord(correctWord.word);
+
+            let distractors = getDistractors(correctWord, 3);
+            let options = [correctWord, ...distractors].sort(() => Math.random() - 0.5);
+            
+            document.getElementById('survival-question').innerText = correctWord.word;
+            
+            const optsEl = document.getElementById('survival-options');
+            optsEl.innerHTML = '';
+            
+            options.forEach((opt, idx) => {
+                let btn = document.createElement('button');
+                btn.className = "w-full bg-white border-2 border-emerald-100 p-3 sm:p-4 rounded-2xl text-sm sm:text-base font-bold text-gray-700 shadow-sm hover:bg-emerald-50 hover:border-emerald-300 transition btn-pop text-center";
+                btn.dataset.isCorrect = (opt.id === correctWord.id);
+                
+                btn.innerHTML = `<span class="bg-emerald-100 text-emerald-600 w-6 h-6 rounded-full inline-flex justify-center items-center text-xs mr-1">${['A','B','C','D'][idx]}</span> ${opt.pos} ${opt.meaning}`;
+                btn.onclick = () => handleSurvivalAnswer(btn);
+                optsEl.appendChild(btn);
+            });
+        }
+
+        function handleSurvivalAnswer(btn) {
+            let isCorrect = btn.dataset.isCorrect === 'true';
+            Array.from(document.getElementById('survival-options').children).forEach(b => {
+                b.onclick = null;
+                if (b.dataset.isCorrect === 'true') {
+                    b.className = b.className.replace('border-emerald-100', 'border-green-400'); b.classList.add('bg-green-50');
+                } else { b.classList.add('opacity-50'); }
+            });
+
+            if (isCorrect) {
+                survivalScore++;
+                if(survivalScore > survivalHighScore) {
+                    survivalHighScore = survivalScore;
+                    saveData();
+                }
+                updateSurvivalUI();
+                playSound('success'); showVisualFeedback('correct');
+                updateWordScore(currentWordIndex, true);
+                setTimeout(nextSurvivalQuestion, 1200); 
+            } else {
+                survivalHearts--;
+                updateSurvivalUI();
+                btn.classList.remove('opacity-50'); 
+                btn.className = btn.className.replace('border-emerald-100', 'border-red-400');
+                btn.classList.add('bg-red-50', 'animate-shake');
+                playSound('wrong'); showVisualFeedback('wrong');
+                updateWordScore(currentWordIndex, false);
+                
+                if(survivalHearts <= 0) {
+                    setTimeout(() => {
+                        alert(`💀 挑戰結束！\n你連續答對了 ${survivalScore} 題。\n獲得 ${survivalScore * 5} 點經驗值！`);
+                        gainExp(survivalScore * 5);
+                        document.getElementById('survival-start-screen').classList.remove('hidden');
+                    }, 1500);
+                } else {
+                    setTimeout(nextSurvivalQuestion, 2000); 
+                }
+            }
+        }
+
+
+        // --- 任務四：記憶翻牌 ---
+        function initMemoryGame() {
+            memoryMoves = 0; memoryPairsLeft = 6;
+            document.getElementById('memory-moves').innerText = memoryMoves;
+            document.getElementById('memory-pairs').innerText = memoryPairsLeft;
+            flippedMemoryCards = [];
+            
+            let selectedWords = [...rawData].sort(() => Math.random() - 0.5).slice(0, 6);
+            memoryCards = [];
+            selectedWords.forEach(w => {
+                memoryCards.push({ id: w.id, text: w.word, type: 'en', matched: false });
+                memoryCards.push({ id: w.id, text: w.meaning, type: 'ch', matched: false });
+            });
+            memoryCards.sort(() => Math.random() - 0.5);
+            renderMemoryGrid();
+        }
+
+        function renderMemoryGrid() {
+            const grid = document.getElementById('memory-grid');
+            grid.innerHTML = '';
+            memoryCards.forEach((card, idx) => {
+                let cardDiv = document.createElement('div');
+                cardDiv.className = "perspective-1000 aspect-square cursor-pointer btn-pop";
+                cardDiv.innerHTML = `
+                    <div id="mem-card-${idx}" class="relative w-full h-full transform-style-3d ${card.matched ? 'rotate-y-180' : ''}">
+                        <div class="card-front bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center border-2 border-purple-300 text-purple-400 text-3xl sm:text-4xl rounded-2xl shadow-sm">
+                            <i class="fas fa-star"></i>
+                        </div>
+                        <div class="card-back ${card.type === 'en' ? 'bg-blue-50' : 'bg-pink-50'} flex items-center justify-center border-2 ${card.type === 'en' ? 'border-blue-300' : 'border-pink-300'} p-2 rounded-2xl shadow-inner">
+                            <span class="text-xs sm:text-sm font-bold text-center break-words">${card.text}</span>
+                        </div>
+                    </div>
+                `;
+                if(!card.matched) cardDiv.onclick = () => flipMemoryCard(idx);
+                grid.appendChild(cardDiv);
+            });
+        }
+
+        function flipMemoryCard(idx) {
+            if(flippedMemoryCards.length >= 2 || memoryCards[idx].matched || flippedMemoryCards.includes(idx)) return;
+            
+            if(memoryCards[idx].type === 'en') speakWord(memoryCards[idx].text); 
+            else playSound('hit');
+
+            document.getElementById(`mem-card-${idx}`).classList.add('rotate-y-180');
+            flippedMemoryCards.push(idx);
+
+            if(flippedMemoryCards.length === 2) {
+                memoryMoves++;
+                document.getElementById('memory-moves').innerText = memoryMoves;
+                checkMemoryMatch();
+            }
+        }
+
+        function checkMemoryMatch() {
+            let [idx1, idx2] = flippedMemoryCards;
+            let card1 = memoryCards[idx1];
+            let card2 = memoryCards[idx2];
+
+            if(card1.id === card2.id) {
+                setTimeout(() => {
+                    playSound('success'); showVisualFeedback('correct');
+                    gainExp(15); 
+                    card1.matched = true; card2.matched = true;
+                    flippedMemoryCards = [];
+                    memoryPairsLeft--;
+                    document.getElementById('memory-pairs').innerText = memoryPairsLeft;
+                    
+                    if(memoryPairsLeft === 0) {
+                        setTimeout(() => {
+                            alert(`🎉 太棒了！你花了 ${memoryMoves} 次完成配對，獲得大量 EXP！`);
+                            gainExp(30); initMemoryGame();
+                        }, 800);
+                    }
+                }, 500);
+            } else {
+                setTimeout(() => {
+                    playSound('wrong');
+                    document.getElementById(`mem-card-${idx1}`).classList.remove('rotate-y-180');
+                    document.getElementById(`mem-card-${idx2}`).classList.remove('rotate-y-180');
+                    flippedMemoryCards = [];
+                }, 1000);
+            }
+        }
+
+        // --- 任務五：魔王戰鬥 ---
+        const bosses = ['🦖', '🐙', '👾', '🧟', '🧛', '👹'];
+        
+        function initBossBattle() {
+            bossHp = 100; bossCombo = 0;
+            updateBossHp();
+            document.getElementById('boss-combo-container').classList.add('hidden');
+            document.getElementById('boss-sprite').innerText = bosses[Math.floor(Math.random() * bosses.length)];
+            nextBossQuestion();
+        }
+
+        function nextBossQuestion() {
+            bossTimeLeft = 10;
+            document.getElementById('boss-timer').innerHTML = `<i class="fas fa-hourglass-half animate-pulse"></i> <span>${bossTimeLeft.toFixed(1)}s</span>`;
+            
+            if(bossTimer) clearInterval(bossTimer);
+            bossTimer = setInterval(() => {
+                bossTimeLeft -= 0.1;
+                document.getElementById('boss-timer').innerHTML = `<i class="fas fa-hourglass-half animate-pulse"></i> <span>${Math.max(0, bossTimeLeft).toFixed(1)}s</span>`;
+                if(bossTimeLeft <= 0) { clearInterval(bossTimer); handleBossAnswer(false, null); }
+            }, 100);
+
+            let correctWord = getWeightedRandomWord();
+            currentWordIndex = correctWord.id;
+            currentSpeakingWord = correctWord.word;
+            speakWord(correctWord.word);
+
+            let distractors = getDistractors(correctWord, 3);
+            let options = [correctWord, ...distractors].sort(() => Math.random() - 0.5);
+            
+            document.getElementById('boss-question').innerText = correctWord.meaning;
+            
+            const optsEl = document.getElementById('boss-options');
+            optsEl.innerHTML = '';
+            options.forEach((opt) => {
+                let btn = document.createElement('button');
+                btn.className = "bg-white border-2 border-gray-200 py-4 px-2 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 active:scale-95 transition text-sm sm:text-base shadow-sm";
+                btn.innerText = opt.word;
+                btn.onclick = () => handleBossAnswer(opt.id === correctWord.id, btn);
+                optsEl.appendChild(btn);
+            });
+        }
+
+        function handleBossAnswer(isCorrect, btn) {
+            clearInterval(bossTimer);
+            Array.from(document.getElementById('boss-options').children).forEach(b => b.onclick = null);
+
+            if(isCorrect) {
+                bossCombo++;
+                let comboContainer = document.getElementById('boss-combo-container');
+                comboContainer.classList.remove('hidden');
+                document.getElementById('boss-combo-text').innerText = bossCombo;
+                comboContainer.classList.remove('combo-anim');
+                void comboContainer.offsetWidth; 
+                comboContainer.classList.add('combo-anim');
+
+                let damage = 15 + Math.min(bossCombo * 3, 15); 
+                playSound('hit');
+                if(bossCombo >= 3) showVisualFeedback('combo', `${bossCombo} COMBO!`);
+
+                if(btn) btn.classList.add('bg-green-100', 'border-green-500', 'text-green-700');
+                
+                const sprite = document.getElementById('boss-sprite');
+                sprite.classList.add('scale-75', 'opacity-50', 'translate-x-4', 'rotate-12');
+                setTimeout(() => sprite.classList.remove('scale-75', 'opacity-50', 'translate-x-4', 'rotate-12'), 200);
+
+                bossHp -= damage; 
+                updateBossHp();
+                updateWordScore(currentWordIndex, true);
+                
+                if(bossHp <= 0) {
+                    showVisualFeedback('correct');
+                    setTimeout(() => {
+                        alert(`🏆 恭喜擊敗魔王！最高連擊 ${bossCombo}，獲得 50 EXP！`);
+                        gainExp(50); initBossBattle();
+                    }, 1000);
+                } else { setTimeout(nextBossQuestion, 800); }
+            } else {
+                bossCombo = 0; 
+                document.getElementById('boss-combo-container').classList.add('hidden');
+                playSound('wrong');
+                if(btn) btn.classList.add('bg-red-100', 'border-red-500', 'text-red-700');
+                showVisualFeedback('wrong');
+                updateWordScore(currentWordIndex, false);
+                setTimeout(nextBossQuestion, 1200);
+            }
+        }
+
+        function updateBossHp() {
+            const hpBar = document.getElementById('boss-hp');
+            hpBar.style.width = `${Math.max(0, bossHp)}%`;
+            document.getElementById('boss-hp-text').innerText = Math.floor(Math.max(0, bossHp));
+            
+            if(bossHp < 30) {
+                hpBar.classList.replace('from-red-600', 'from-yellow-500'); hpBar.classList.replace('to-red-400', 'to-yellow-300');
+            } else {
+                hpBar.classList.replace('from-yellow-500', 'from-red-600'); hpBar.classList.replace('to-yellow-300', 'to-red-400');
+            }
+        }
+
+        const style = document.createElement('style');
+        style.innerHTML = `@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } } .animate-shake { animation: shake 0.3s ease-in-out; }`;
+        document.head.appendChild(style);
+
+    </script>
+</body>
+</html>
